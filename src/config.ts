@@ -76,12 +76,23 @@ function parseBoolean(value: unknown, fallback: boolean): boolean {
   return fallback
 }
 
+function normalizeContestId(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
 function normalizeConfig(source: RuntimeConfig, fallback: AppConfig): AppConfig {
+  const sourceContestId = normalizeContestId(source.contestId)
+
   return {
     apiBaseUrl: sanitizeApiBaseUrl(
       typeof source.apiBaseUrl === 'string' ? source.apiBaseUrl : fallback.apiBaseUrl,
     ),
-    contestId: typeof source.contestId === 'string' ? source.contestId : fallback.contestId,
+    contestId: sourceContestId ?? fallback.contestId,
     withCredentials: parseBoolean(source.withCredentials, fallback.withCredentials),
     autoRefreshMs: parsePositiveNumber(source.autoRefreshMs, fallback.autoRefreshMs),
     requestTimeoutMs: parsePositiveNumber(source.requestTimeoutMs, fallback.requestTimeoutMs),

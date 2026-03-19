@@ -1,127 +1,29 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { loadAppConfig, type AppConfig } from './config.ts'
+import { useAuth, AuthProvider } from './contexts/AuthContext'
+import { ProtectedRoute } from './middleware/ProtectedRoute'
+import { LoginView } from './views/LoginView'
+import { DashboardView } from './views/DashboardView'
+import { ContestView } from './views/ContestView'
+import { WorkspaceView } from './views/WorkspaceView'
+import { AppHeader } from './components/AppHeader'
+import {
+  formatClock,
+  parseDurationToSeconds,
+  formatSecondsAsDuration,
+  buildApiResourceUrl,
+  requestJson,
+  starterCode,
+} from './utils'
+import type { ViewMode, EditorLanguage, Contest, Scoreboard, Team, ContestProblem, Submission, Clarification, Language } from './types'
 
-type Contest = {
-  id: string
-  cid?: number
-  name: string
-  shortname?: string
-  formal_name?: string
-}
+const DRAFTS_STORAGE_KEY = 'domjudge-problem-drafts-v1'
 
-type ContestState = {
-  frozen?: string | null
-  thawed?: string | null
-}
-
-type Score = {
-  num_solved: number
-  total_time: number | null
-}
-
-type ScoreboardProblem = {
-  label: string
-  num_judged: number
-  num_pending: number
-  solved: boolean
-  time: number | null
-}
-
-type ScoreboardRow = {
-  rank: number
-  team_id: string
-  score: Score
-  problems: ScoreboardProblem[]
-}
-
-type Scoreboard = {
-  contest_time: string | null
-  state: ContestState | null
-  rows: ScoreboardRow[]
-}
-
-type Team = {
-  id: string
-  name: string
-  display_name: string | null
-  label: string
-}
-
-type ContestProblem = {
-  ordinal: number
-  label: string
-  id: string
-}
-
-type Submission = {
-  id: string | null
-  time: string
-  contest_time: string
-  team_id: string
-  problem_id: string
-}
-
-type Clarification = {
-  id: string | null
-  time: string | null
-  contest_time: string
-  from_team_id: string | null
-  problem_id: string | null
-}
-
-async function requestJson<T>(config: AppConfig, path: string, signal: AbortSignal): Promise<T> {
-  const timeoutController = new AbortController()
-  const onAbort = () => timeoutController.abort()
-  signal.addEventListener('abort', onAbort)
-  const timeoutId = window.setTimeout(() => {
-    timeoutController.abort()
-  }, config.requestTimeoutMs)
-
-  try {
-    const response = await fetch(`${config.apiBaseUrl}${path}`, {
-      signal: timeoutController.signal,
-      credentials: config.withCredentials ? 'include' : 'omit',
-      headers: {
-        Accept: 'application/json',
-      },
-    })
-
-    if (!response.ok) {
-      throw new Error(`Request failed for ${path}: ${response.status} ${response.statusText}`)
-    }
-
-    return (await response.json()) as T
-  } catch (error) {
-    if (timeoutController.signal.aborted && !signal.aborted) {
-      throw new Error(`Request timeout for ${path} after ${config.requestTimeoutMs}ms`)
-    }
-    throw error
-  } finally {
-    signal.removeEventListener('abort', onAbort)
-    window.clearTimeout(timeoutId)
-  }
-}
-
-function formatClock(value: string | null | undefined): string {
-  if (!value) {
-    return '--:--:--'
-  }
-
-  const clean = value.split('.')[0]
-  if (/^\d{1,2}:\d{2}:\d{2}$/.test(clean)) {
-    return clean
-  }
-
-  const parsed = new Date(value)
-  if (!Number.isNaN(parsed.valueOf())) {
-    return parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-  }
-
-  return clean
-}
-
-function App() {
+function AppContent() {
+  const { logout } = useAuth()
+  const [viewMode, setViewMode] = useState<ViewMode>('dashboard')
+  const [appConfig, setAppConfig] = useState<AppConfig | null>(null)
   const [contest, setContest] = useState<Contest | null>(null)
   const [scoreboard, setScoreboard] = useState<Scoreboard | null>(null)
   const [teams, setTeams] = useState<Team[]>([])
@@ -130,6 +32,40 @@ function App() {
   const [clarifications, setClarifications] = useState<Clarification[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [warning, setWarning] = useState<string | null>(null)
+  const [liveContestTime, setLiveContestTime] = useState('--:--:--')
+  const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null)
+  const [editorLanguage, setEditorLanguage] = useState<EditorLanguage>('javascript')
+  const [stdinValue, setStdinValue] = useState('')
+  const [runOutput, setRunOutput] = useState('Run your code locally to see output here.')
+  const [runStatus, setRunStatus] = useState<'idle' | 'ok' | 'error'>('idle')
+  const [draftsByProblem, setDraftsByProblem] = useState<Record<string, Record<EditorLanguage, string>>>({})
+  const [languages, setLanguages] = useState<Language[]>([])
+  const [selectedLanguageId, setSelectedLanguageId] = useState<string>('')
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'ok' | 'error'>('idle')
+  const [submitMessage, setSubmitMessage] = useState('Submit your current draft to DOMjudge.')
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(DRAFTS_STORAGE_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved) as Record<string, Record<EditorLanguage, string>>
+        if (parsed && typeof parsed === 'object') {
+          setDraftsByProblem(parsed)
+        }
+      }
+    } catch {
+      // Ignore malformed local draft cache.
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(DRAFTS_STORAGE_KEY, JSON.stringify(draftsByProblem))
+    } catch {
+      // ignore storage failures (private mode/quota).
+    }
+  }, [draftsByProblem])
 
   useEffect(() => {
     let timerId: number | null = null
@@ -142,35 +78,79 @@ function App() {
       activeController = controller
 
       setError(null)
+      setWarning(null)
       try {
         const contests = await requestJson<Contest[]>(nextConfig, '/contests', controller.signal)
         if (contests.length === 0) {
           throw new Error('No contests available from DOMjudge API.')
         }
 
-        const activeContest =
-          contests.find((item) => nextConfig.contestId && item.id === nextConfig.contestId) || contests[0]
+        const configuredContestId = nextConfig.contestId?.trim()
+        let selectedContest: Contest = contests[0]
 
-        const contestId = encodeURIComponent(activeContest.id)
+        if (configuredContestId) {
+          const exactMatch = contests.find(
+            (item) => item.id === configuredContestId || String(item.cid ?? '') === configuredContestId,
+          )
 
-        const [nextScoreboard, nextTeams, nextProblems, nextSubmissions, nextClarifications] = await Promise.all([
-          requestJson<Scoreboard>(nextConfig, `/contests/${contestId}/scoreboard`, controller.signal),
-          requestJson<Team[]>(nextConfig, `/contests/${contestId}/teams`, controller.signal),
-          requestJson<ContestProblem[]>(nextConfig, `/contests/${contestId}/problems`, controller.signal),
-          requestJson<Submission[]>(nextConfig, `/contests/${contestId}/submissions`, controller.signal),
-          requestJson<Clarification[]>(nextConfig, `/contests/${contestId}/clarifications`, controller.signal),
-        ])
+          if (exactMatch) {
+            selectedContest = exactMatch
+          } else {
+            const available = contests
+              .map((item) => `${item.id}${item.cid !== undefined ? ` (cid:${item.cid})` : ''}`)
+              .join(', ')
+
+            setWarning(
+              `Configured contestId "${configuredContestId}" was not found for this account/session. ` +
+                `Falling back to "${selectedContest.id}". Available contests: ${available}`,
+            )
+          }
+        }
+
+        const contestId = encodeURIComponent(selectedContest.id)
+
+        const [nextScoreboard, nextTeams, nextProblems, nextSubmissions, nextClarifications, nextLanguages] =
+          await Promise.all([
+            requestJson<Scoreboard>(nextConfig, `/contests/${contestId}/scoreboard`, controller.signal),
+            requestJson<Team[]>(nextConfig, `/contests/${contestId}/teams`, controller.signal),
+            requestJson<ContestProblem[]>(nextConfig, `/contests/${contestId}/problems`, controller.signal),
+            requestJson<Submission[]>(nextConfig, `/contests/${contestId}/submissions`, controller.signal),
+            requestJson<Clarification[]>(nextConfig, `/contests/${contestId}/clarifications`, controller.signal),
+            requestJson<Language[]>(nextConfig, `/contests/${contestId}/languages`, controller.signal),
+          ])
 
         if (controller.signal.aborted || isDisposed) {
           return
         }
 
-        setContest(activeContest)
+        setContest(selectedContest)
         setScoreboard(nextScoreboard)
         setTeams(nextTeams)
         setProblems(nextProblems)
         setSubmissions(nextSubmissions)
         setClarifications(nextClarifications)
+        setLanguages(nextLanguages)
+
+        if (nextLanguages.length > 0) {
+          setSelectedLanguageId((previous) => {
+            if (previous && nextLanguages.some((language) => language.id === previous)) {
+              return previous
+            }
+
+            const preferredByEditor =
+              editorLanguage === 'javascript'
+                ? ['js', 'javascript', 'nodejs']
+                : editorLanguage === 'python'
+                  ? ['py', 'python3', 'python']
+                  : ['cpp', 'c++17', 'c++']
+
+            const matched = nextLanguages.find((language) =>
+              preferredByEditor.some((token) => language.id.toLowerCase().includes(token)),
+            )
+
+            return matched?.id ?? nextLanguages[0].id
+          })
+        }
       } catch (loadError) {
         if (controller.signal.aborted || isDisposed) {
           return
@@ -189,6 +169,8 @@ function App() {
         if (isDisposed) {
           return
         }
+
+        setAppConfig(nextConfig)
 
         await loadContestData(nextConfig)
 
@@ -215,13 +197,106 @@ function App() {
     }
   }, [])
 
+  useEffect(() => {
+    const baseSeconds = parseDurationToSeconds(scoreboard?.contest_time)
+
+    if (baseSeconds === null) {
+      setLiveContestTime(formatClock(scoreboard?.contest_time))
+      return
+    }
+
+    const syncedAtMs = Date.now()
+
+    const tick = () => {
+      const elapsedSeconds = Math.floor((Date.now() - syncedAtMs) / 1000)
+      setLiveContestTime(formatSecondsAsDuration(baseSeconds + elapsedSeconds))
+    }
+
+    tick()
+    const intervalId = window.setInterval(tick, 1000)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [scoreboard?.contest_time])
+
   const teamNameById = useMemo(() => {
     return new Map(teams.map((team) => [team.id, team.display_name || team.name || team.label]))
   }, [teams])
 
+  useEffect(() => {
+    if (problems.length === 0) {
+      setSelectedProblemId(null)
+      return
+    }
+
+    if (!selectedProblemId || !problems.some((problem) => problem.id === selectedProblemId)) {
+      setSelectedProblemId(problems[0].id)
+    }
+  }, [problems, selectedProblemId])
+
+  useEffect(() => {
+    if (languages.length === 0) {
+      return
+    }
+
+    const preferredByEditor =
+      editorLanguage === 'javascript'
+        ? ['js', 'javascript', 'nodejs']
+        : editorLanguage === 'python'
+          ? ['py', 'python3', 'python']
+          : ['cpp', 'c++17', 'c++']
+
+    const matched = languages.find((language) =>
+      preferredByEditor.some((token) => language.id.toLowerCase().includes(token)),
+    )
+
+    if (matched && matched.id !== selectedLanguageId) {
+      setSelectedLanguageId(matched.id)
+    }
+  }, [editorLanguage, languages, selectedLanguageId])
+
   const problemLabels = useMemo(() => {
     return [...problems].sort((a, b) => a.ordinal - b.ordinal).map((problem) => problem.label)
   }, [problems])
+
+  const selectedProblem = useMemo(() => {
+    return problems.find((problem) => problem.id === selectedProblemId) ?? null
+  }, [problems, selectedProblemId])
+
+  const activeProblemKey = selectedProblem?.id ?? '__global__'
+  const activeEditorCode = draftsByProblem[activeProblemKey]?.[editorLanguage] ?? starterCode[editorLanguage]
+
+  const setActiveEditorCode = (nextCode: string) => {
+    setDraftsByProblem((previous) => {
+      const previousByProblem = previous[activeProblemKey] ?? { ...starterCode }
+      return {
+        ...previous,
+        [activeProblemKey]: {
+          ...previousByProblem,
+          [editorLanguage]: nextCode,
+        },
+      }
+    })
+  }
+
+  const problemStats = useMemo(() => {
+    const stats = new Map<string, { solved: number; attempts: number; pending: number }>()
+
+    for (const row of scoreboard?.rows || []) {
+      for (const problem of row.problems) {
+        const current = stats.get(problem.problem_id) || { solved: 0, attempts: 0, pending: 0 }
+        current.attempts += problem.num_judged + problem.num_pending
+        current.pending += problem.num_pending
+        if (problem.solved) {
+          current.solved += 1
+        }
+        stats.set(problem.problem_id, current)
+      }
+    }
+
+    return stats
+  }, [scoreboard])
 
   const recentSubmissions = useMemo(() => {
     return [...submissions].sort((a, b) => (a.time < b.time ? 1 : -1)).slice(0, 8)
@@ -233,163 +308,215 @@ function App() {
 
   const isFrozen = Boolean(scoreboard?.state?.frozen && !scoreboard?.state?.thawed)
 
+  const selectedStatementUrl = buildApiResourceUrl(appConfig, selectedProblem?.statement?.[0]?.href)
+
+  const runCodeLocally = async () => {
+    if (editorLanguage !== 'javascript') {
+      setRunStatus('error')
+      setRunOutput('Local runner currently supports JavaScript only. Use this page as a coding workspace for other languages.')
+      return
+    }
+
+    try {
+      setRunStatus('idle')
+      const maybeSolve = new Function(`${activeEditorCode}\nreturn typeof solve === 'function' ? solve : null;`)()
+
+      if (typeof maybeSolve !== 'function') {
+        throw new Error('Define a function named solve(input) to run code locally.')
+      }
+
+      const result = maybeSolve(stdinValue)
+      const resolved = result instanceof Promise ? await result : result
+
+      setRunStatus('ok')
+      setRunOutput(String(resolved ?? ''))
+    } catch (runError) {
+      setRunStatus('error')
+      setRunOutput(runError instanceof Error ? runError.message : 'Runtime error while executing code.')
+    }
+  }
+
+  const submitToDomjudge = async () => {
+    if (!appConfig || !contest || !selectedProblem) {
+      setSubmitStatus('error')
+      setSubmitMessage('Contest or problem is not loaded yet.')
+      return
+    }
+
+    if (!selectedLanguageId) {
+      setSubmitStatus('error')
+      setSubmitMessage('Select a DOMjudge language first.')
+      return
+    }
+
+    if (!activeEditorCode.trim()) {
+      setSubmitStatus('error')
+      setSubmitMessage('Code is empty. Write a solution before submitting.')
+      return
+    }
+
+    let timeoutId: number | null = null
+
+    try {
+      setSubmitStatus('idle')
+      setSubmitMessage('Submitting...')
+
+      const timeoutController = new AbortController()
+      timeoutId = window.setTimeout(() => timeoutController.abort(), appConfig.requestTimeoutMs)
+
+      const extension =
+        editorLanguage === 'javascript' ? 'js' : editorLanguage === 'python' ? 'py' : 'cpp'
+
+      const formData = new FormData()
+      formData.append('problem_id', selectedProblem.id)
+      formData.append('language_id', selectedLanguageId)
+      formData.append('code', new Blob([activeEditorCode], { type: 'text/plain' }), `main.${extension}`)
+
+      const response = await fetch(
+        `${appConfig.apiBaseUrl}/contests/${encodeURIComponent(contest.id)}/submissions`,
+        {
+          method: 'POST',
+          credentials: appConfig.withCredentials ? 'include' : 'omit',
+          body: formData,
+          signal: timeoutController.signal,
+        },
+      )
+
+      if (!response.ok) {
+        const errorBody = await response.text()
+        throw new Error(`Submit failed (${response.status}): ${errorBody || response.statusText}`)
+      }
+
+      const payload = (await response.json().catch(() => null)) as
+        | { id?: string; submitid?: number }
+        | null
+
+      setSubmitStatus('ok')
+      setSubmitMessage(
+        payload?.id || payload?.submitid
+          ? `Submitted successfully. Submission ID: ${payload.id ?? payload.submitid}`
+          : 'Submitted successfully.',
+      )
+    } catch (submitError) {
+      setSubmitStatus('error')
+      setSubmitMessage(submitError instanceof Error ? submitError.message : 'Submit failed.')
+    } finally {
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId)
+      }
+    }
+  }
+
+  const renderDashboard = () => (
+    <DashboardView
+      appConfig={appConfig}
+      contest={contest}
+      scoreboard={scoreboard}
+      teams={teams}
+      submissions={submissions}
+      clarifications={clarifications}
+      problemLabels={problemLabels}
+      recentSubmissions={recentSubmissions}
+      recentClarifications={recentClarifications}
+      teamNameById={teamNameById}
+      formatClock={formatClock}
+    />
+  )
+
+  const renderContest = () => (
+    <ContestView
+      selectedProblemId={selectedProblemId}
+      onProblemSelect={setSelectedProblemId}
+      problems={problems}
+      problemStats={problemStats}
+      selectedStatementUrl={selectedStatementUrl}
+      editorLanguage={editorLanguage}
+      onLanguageChange={setEditorLanguage}
+      activeEditorCode={activeEditorCode}
+      onCodeChange={setActiveEditorCode}
+      selectedLanguageId={selectedLanguageId}
+      onLanguageIdChange={setSelectedLanguageId}
+      languages={languages}
+      onRunLocal={runCodeLocally}
+      onSubmit={submitToDomjudge}
+      submitMessage={submitMessage}
+      submitStatus={submitStatus}
+      onOpenWorkspace={() => setViewMode('workspace')}
+    />
+  )
+
+  const renderWorkspace = () => (
+    <WorkspaceView
+      selectedProblemId={selectedProblemId}
+      problems={problems}
+      selectedProblem={selectedProblem}
+      editorLanguage={editorLanguage}
+      onLanguageChange={setEditorLanguage}
+      activeEditorCode={activeEditorCode}
+      onCodeChange={setActiveEditorCode}
+      selectedLanguageId={selectedLanguageId}
+      onLanguageIdChange={setSelectedLanguageId}
+      languages={languages}
+      onRunLocal={runCodeLocally}
+      onSubmit={submitToDomjudge}
+      submitMessage={submitMessage}
+      submitStatus={submitStatus}
+      stdinValue={stdinValue}
+      onStdinChange={setStdinValue}
+      runOutput={runOutput}
+      runStatus={runStatus}
+    />
+  )
+
   return (
     <div className="app">
-      <header className="topbar">
-        <div className="brand">
-          <span className="logo-mark" aria-hidden="true">
-            DJ
-          </span>
-          <div>
-            <p className="brand-name">DOMjudge</p>
-            <p className="brand-sub">ICPC Contest Arena</p>
-          </div>
-        </div>
-        <nav className="actions">
-          <button type="button">Contest: {contest?.id ?? '...'}</button>
-          <button type="button">Teams: {teams.length}</button>
-          <button type="button">Problems: {problemLabels.length}</button>
-          <span className="timer">{formatClock(scoreboard?.contest_time)}</span>
-        </nav>
-      </header>
+      <ProtectedRoute onFallback={() => setViewMode('login')}>
+        <AppHeader
+          contest={contest}
+          teams={teams}
+          problemCount={problemLabels.length}
+          liveContestTime={liveContestTime}
+          isFrozen={isFrozen}
+          onViewChange={(view) => setViewMode(view)}
+          onLogout={logout}
+        />
 
-      <section className="hero-strip">
-        <h1>{contest?.formal_name || contest?.name || 'DOMjudge Contest'}</h1>
-        <p>
-          {isFrozen
-            ? 'Scoreboard is currently frozen. Pending submissions may not be visible yet.'
-            : 'Scoreboard is live. Updates refresh automatically every 15 seconds.'}
-        </p>
-      </section>
-
-      <section className="problem-pills" aria-label="problem legend">
-        {problemLabels.map((label) => (
-          <span key={label} className="pill">
-            {label}
-          </span>
-        ))}
-      </section>
-
-      {loading ? (
-        <section className="panel loading-panel">Loading contest data from DOMjudge API...</section>
-      ) : null}
-
-      {error ? (
-        <section className="panel error-panel">
-          <strong>API error:</strong> {error}
-        </section>
-      ) : null}
-
-      <main className="content-grid">
-        <section className="panel scoreboard-panel">
-          <header className="panel-header">
-            <h2>Live Scoreboard</h2>
-            <button type="button" className="filter-button">Auto refresh: 15s</button>
-          </header>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Rank</th>
-                  <th>Team</th>
-                  <th>Solved</th>
-                  <th>Score</th>
-                  {problemLabels.map((label) => (
-                    <th key={label}>{label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {(scoreboard?.rows || []).map((row) => {
-                  const problemByLabel = new Map(row.problems.map((problem) => [problem.label, problem]))
-
-                  return (
-                  <tr key={`${row.rank}-${row.team_id}`}>
-                    <td>{row.rank}</td>
-                    <td className="team">{teamNameById.get(row.team_id) || row.team_id}</td>
-                    <td>{row.score.num_solved}</td>
-                    <td>{row.score.total_time ?? 0}</td>
-                    {problemLabels.map((label) => {
-                      const scoreProblem = problemByLabel.get(label)
-                      if (!scoreProblem) {
-                        return <td key={`${row.team_id}-${label}`}>-</td>
-                      }
-
-                      if (scoreProblem.solved) {
-                        return (
-                          <td key={`${row.team_id}-${label}`}>
-                            <span className="status status-ok">+{scoreProblem.time ?? ''}</span>
-                          </td>
-                        )
-                      }
-
-                      if (scoreProblem.num_pending > 0) {
-                        return (
-                          <td key={`${row.team_id}-${label}`}>
-                            <span className="status status-pending">?{scoreProblem.num_pending}</span>
-                          </td>
-                        )
-                      }
-
-                      if (scoreProblem.num_judged > 0) {
-                        return (
-                          <td key={`${row.team_id}-${label}`}>
-                            <span className="status status-failed">-{scoreProblem.num_judged}</span>
-                          </td>
-                        )
-                      }
-
-                      return <td key={`${row.team_id}-${label}`}>-</td>
-                    })}
-                  </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+        <section className="problem-pills" aria-label="problem legend">
+          {problemLabels.map((label) => (
+            <span key={label} className="pill">
+              {label}
+            </span>
+          ))}
         </section>
 
-        <section className="side-stack">
-          <article className="panel">
-            <header className="panel-header">
-              <h2>Submissions</h2>
-            </header>
-            <ul className="list submissions-list">
-              {recentSubmissions.map((item) => (
-                <li key={`${item.id ?? item.time}-${item.problem_id}`}>
-                  <span>{formatClock(item.contest_time || item.time)}</span>
-                  <strong className="problem-tag">{item.problem_id}</strong>
-                  <span>{teamNameById.get(item.team_id) || item.team_id}</span>
-                  <span className="status status-pending">SUBMITTED</span>
-                </li>
-              ))}
-              {recentSubmissions.length === 0 ? (
-                <li className="empty-item">No submissions available.</li>
-              ) : null}
-            </ul>
-          </article>
+        {loading ? <section className="panel loading-panel">Loading contest data from DOMjudge API...</section> : null}
 
-          <article className="panel">
-            <header className="panel-header">
-              <h2>Clarifications</h2>
-            </header>
-            <ul className="list clarifications-list">
-              {recentClarifications.map((item) => (
-                <li key={`${item.id ?? item.contest_time}-${item.problem_id ?? 'general'}`}>
-                  <span>{formatClock(item.contest_time || item.time)}</span>
-                  <strong>{item.from_team_id ? teamNameById.get(item.from_team_id) || item.from_team_id : 'Jury'}</strong>
-                  <span>{item.problem_id ? `Problem ${item.problem_id}` : 'General'}</span>
-                </li>
-              ))}
-              {recentClarifications.length === 0 ? (
-                <li className="empty-item">No clarifications available.</li>
-              ) : null}
-            </ul>
-          </article>
-        </section>
-      </main>
+        {error ? (
+          <section className="panel error-panel">
+            <strong>API error:</strong> {error}
+          </section>
+        ) : null}
+
+        {warning ? (
+          <section className="panel warning-panel">
+            <strong>Warning:</strong> {warning}
+          </section>
+        ) : null}
+
+        {viewMode === 'dashboard' ? renderDashboard() : null}
+        {viewMode === 'contest' ? renderContest() : null}
+        {viewMode === 'workspace' ? renderWorkspace() : null}
+      </ProtectedRoute>
+
+      {viewMode === 'login' && <LoginView onSuccess={() => setViewMode('dashboard')} />}
     </div>
   )
 }
 
-export default App
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  )
+}
