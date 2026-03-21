@@ -1,4 +1,4 @@
-import type { AppConfig } from '../config.ts'
+import type { AppConfig } from './../utils/config.ts'
 import type { Clarification, Contest, Scoreboard, Submission, Team, ScoreboardRow, ScoreboardProblem } from '../types.ts'
 
 interface DashboardViewProps {

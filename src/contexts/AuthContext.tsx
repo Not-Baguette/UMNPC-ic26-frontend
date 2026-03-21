@@ -15,11 +15,6 @@ type AuthContextType = {
   isLoading: boolean
   login: (username: string, password: string) => Promise<void>
   logout: () => void
-  register: (userData: {
-    username: string
-    password: string
-    fullname: string
-  }) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -55,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const login = async (username: string, password: string) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-unused-expressions
     password
     // Mock login - in a real app, this would call your backend
     // For now, we'll create a basic user object
@@ -71,28 +66,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     saveUser(null)
   }
 
-  const register = async (userData: { username: string; password: string; fullname: string }) => {
-    // Mock registration - in a real app, this would call DOMjudge API
-    const newUser: AuthUser = {
-      id: `user_${Date.now()}`,
-      username: userData.username,
-      fullname: userData.fullname,
-    }
-    saveUser(newUser)
-  }
-
   const value: AuthContextType = {
     user,
     isAuthenticated: !!user,
     isLoading,
     login,
     logout,
-    register,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext)
   if (!context) {

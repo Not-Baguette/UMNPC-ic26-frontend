@@ -1,7 +1,7 @@
-import type { ContestProblem, Language } from '../types'
+import type { ContestProblem, Language } from './../utils/types'
 import { EditorPane } from './ContestView'
 
-interface WorkspaceViewProps {
+interface ProblemsetViewProps {
   selectedProblemId: string | null
   problems: ContestProblem[]
   selectedProblem: ContestProblem | null
@@ -22,7 +22,7 @@ interface WorkspaceViewProps {
   runStatus: 'idle' | 'ok' | 'error'
 }
 
-export function WorkspaceView({
+export function ProblemsetView({
   selectedProblem,
   editorLanguage,
   onLanguageChange,
@@ -39,7 +39,7 @@ export function WorkspaceView({
   onStdinChange,
   runOutput,
   runStatus,
-}: WorkspaceViewProps) {
+}: ProblemsetViewProps) {
   return (
     <main className="workspace-layout">
       <EditorPane

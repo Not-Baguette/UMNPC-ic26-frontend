@@ -1,4 +1,4 @@
-import type { ContestProblem, Language } from '../types.ts'
+import type { ContestProblem, Language } from './../utils/utils'
 
 interface EditorPaneProps {
   mode: 'workspace' | 'contest'

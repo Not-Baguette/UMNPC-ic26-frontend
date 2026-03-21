@@ -1,15 +1,12 @@
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
-type AuthStep = 'login' | 'register' | 'register-complete'
-
 interface LoginViewProps {
   onSuccess?: () => void
 }
 
 export function LoginView({ onSuccess }: LoginViewProps) {
-  const { login, register } = useAuth()
-  const [step, setStep] = useState<AuthStep>('login')
+  const { login } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
@@ -18,13 +15,7 @@ export function LoginView({ onSuccess }: LoginViewProps) {
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
 
-  // Register form fields
-  const [regUsername, setRegUsername] = useState('')
-  const [regPassword, setRegPassword] = useState('')
-  const [regPasswordConfirm, setRegPasswordConfirm] = useState('')
-  const [regFullName, setRegFullName] = useState('')
-
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError(null)
     setLoading(true)
@@ -47,90 +38,40 @@ export function LoginView({ onSuccess }: LoginViewProps) {
     }
   }
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    setLoading(true)
-
-    try {
-      if (!regUsername.trim()) {
-        throw new Error('Username is required')
-      }
-      if (!regFullName.trim()) {
-        throw new Error('Full name is required')
-      }
-      if (!regPassword) {
-        throw new Error('Password is required')
-      }
-      if (regPassword !== regPasswordConfirm) {
-        throw new Error('Passwords do not match')
-      }
-      if (regPassword.length < 6) {
-        throw new Error('Password must be at least 6 characters')
-      }
-
-      await register({
-        username: regUsername,
-        password: regPassword,
-        fullname: regFullName,
-      })
-
-      setFeedback('Registration successful! Welcome to the contest.')
-      setStep('register-complete')
-      setTimeout(() => {
-        onSuccess?.()
-      }, 1500)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   return (
-    <main className="auth-view" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '2rem' }}>
-      <section className="auth-container" style={{ width: '100%', maxWidth: '400px' }}>
-        <header style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <h1>DOMjudge Contest Arena</h1>
-          <p style={{ color: '#666', margin: 0 }}>
-            {step === 'login' ? 'Sign in to your account' : 'Create a new account'}
+    <main className="min-h-screen flex flex-col items-center justify-center bg-[#f3f4f1] p-6">
+      <section className="w-full max-w-md bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+        {/* Header Section */}
+        <header className="bg-[#0736ff] py-8 px-6 text-center">
+          <h1 className="text-2xl font-bold text-white tracking-tight">
+            Internal Contest <span className="text-[#fadb5e]">Arena</span>
+          </h1>
+          <p className="text-blue-100 mt-2 text-sm opacity-90">
+            Sign in with your provided contestant account
           </p>
         </header>
 
-        {error && (
-          <div
-            style={{
-              backgroundColor: '#fee',
-              color: '#c33',
-              padding: '1rem',
-              borderRadius: '4px',
-              marginBottom: '1rem',
-              fontSize: '0.9rem',
-            }}
-          >
-            {error}
-          </div>
-        )}
+        <div className="p-8">
+          {/* Alert Messaging */}
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 text-sm">
+              <p className="font-bold">Error</p>
+              <p>{error}</p>
+            </div>
+          )}
 
-        {feedback && (
-          <div
-            style={{
-              backgroundColor: '#efe',
-              color: '#3c3',
-              padding: '1rem',
-              borderRadius: '4px',
-              marginBottom: '1rem',
-              fontSize: '0.9rem',
-            }}
-          >
-            {feedback}
-          </div>
-        )}
+          {feedback && (
+            <div className="mb-6 p-4 bg-green-50 border-l-4 border-green-500 text-green-700 text-sm">
+              {feedback}
+            </div>
+          )}
 
-        {step === 'login' && (
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div>
-              <label htmlFor="login-username" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div className="space-y-2">
+              <label
+                htmlFor="login-username"
+                className="block text-sm font-semibold text-[#211f1f]"
+              >
                 Username
               </label>
               <input
@@ -139,19 +80,16 @@ export function LoginView({ onSuccess }: LoginViewProps) {
                 value={loginUsername}
                 onChange={(e) => setLoginUsername(e.target.value)}
                 disabled={loading}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '1rem',
-                  boxSizing: 'border-box',
-                }}
+                placeholder="Enter your username"
+                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#0736ff] focus:border-transparent outline-none transition-all disabled:bg-gray-100"
               />
             </div>
 
-            <div>
-              <label htmlFor="login-password" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+            <div className="space-y-2">
+              <label
+                htmlFor="login-password"
+                className="block text-sm font-semibold text-[#211f1f]"
+              >
                 Password
               </label>
               <input
@@ -160,180 +98,36 @@ export function LoginView({ onSuccess }: LoginViewProps) {
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
                 disabled={loading}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '1rem',
-                  boxSizing: 'border-box',
-                }}
+                placeholder="••••••••"
+                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#0736ff] focus:border-transparent outline-none transition-all disabled:bg-gray-100"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              style={{
-                padding: '0.75rem',
-                backgroundColor: '#0066cc',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                fontSize: '1rem',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                opacity: loading ? 0.6 : 1,
-              }}
+              className={`w-full py-3 px-4 rounded-lg text-white font-bold text-lg transition-all transform active:scale-[0.98] 
+                ${loading
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-[#0736ff] hover:bg-blue-700 hover:shadow-md'
+                }`}
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                  Authenticating...
+                </span>
+              ) : 'Sign In'}
             </button>
-
-            <div style={{ textAlign: 'center', fontSize: '0.9rem', color: '#666' }}>
-              Don't have an account?{' '}
-              <button
-                type="button"
-                onClick={() => {
-                  setStep('register')
-                  setError(null)
-                  setFeedback(null)
-                }}
-                style={{ background: 'none', border: 'none', color: '#0066cc', cursor: 'pointer', textDecoration: 'underline' }}
-              >
-                Sign up
-              </button>
-            </div>
           </form>
-        )}
 
-        {step === 'register' && (
-          <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div>
-              <label htmlFor="reg-fullname" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                Full Name
-              </label>
-              <input
-                id="reg-fullname"
-                type="text"
-                value={regFullName}
-                onChange={(e) => setRegFullName(e.target.value)}
-                disabled={loading}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '1rem',
-                  boxSizing: 'border-box',
-                }}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="reg-username" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                Username
-              </label>
-              <input
-                id="reg-username"
-                type="text"
-                value={regUsername}
-                onChange={(e) => setRegUsername(e.target.value)}
-                disabled={loading}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '1rem',
-                  boxSizing: 'border-box',
-                }}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="reg-password" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                Password
-              </label>
-              <input
-                id="reg-password"
-                type="password"
-                value={regPassword}
-                onChange={(e) => setRegPassword(e.target.value)}
-                disabled={loading}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '1rem',
-                  boxSizing: 'border-box',
-                }}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="reg-password-confirm" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                Confirm Password
-              </label>
-              <input
-                id="reg-password-confirm"
-                type="password"
-                value={regPasswordConfirm}
-                onChange={(e) => setRegPasswordConfirm(e.target.value)}
-                disabled={loading}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '1rem',
-                  boxSizing: 'border-box',
-                }}
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                padding: '0.75rem',
-                backgroundColor: '#0066cc',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                fontSize: '1rem',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                opacity: loading ? 0.6 : 1,
-              }}
-            >
-              {loading ? 'Creating account...' : 'Sign Up'}
-            </button>
-
-            <div style={{ textAlign: 'center', fontSize: '0.9rem', color: '#666' }}>
-              Already have an account?{' '}
-              <button
-                type="button"
-                onClick={() => {
-                  setStep('login')
-                  setError(null)
-                  setFeedback(null)
-                }}
-                style={{ background: 'none', border: 'none', color: '#0066cc', cursor: 'pointer', textDecoration: 'underline' }}
-              >
-                Sign in
-              </button>
-            </div>
-          </form>
-        )}
-
-        {step === 'register-complete' && (
-          <div style={{ textAlign: 'center', padding: '2rem 0' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>✓</div>
-            <h2 style={{ margin: '0 0 1rem 0' }}>Welcome!</h2>
-            <p style={{ color: '#666' }}>Your account has been created successfully. Redirecting you to the contest...</p>
-          </div>
-        )}
+          <footer className="mt-8 text-center">
+            <p className="text-xs text-gray-500">
+              Accounts are pre-assigned by the administrator. <br />
+              Need help? Contact the contest supervisor.
+            </p>
+          </footer>
+        </div>
       </section>
     </main>
   )

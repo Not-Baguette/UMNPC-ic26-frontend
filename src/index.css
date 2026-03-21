@@ -1,28 +1,41 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap");
+@import "tailwindcss";
+
+@theme {
+    --color-primaryYellow: #fadb5e;
+    --color-primaryYellowLight: #ffff70;
+    --color-primaryBlue: #0736ff;
+    --color-primaryWhite: #f3f4f1;
+    --color-primaryBlack: #211f1f;
+}
 
 :root {
-  --primary-60: #1800ac;
-  --secondary-30: #ffde57;
-  --accent-10: #000000;
-  --font-main: 'Space Grotesk', 'Trebuchet MS', sans-serif;
-  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+    --primary-60: #1800ac;
+    --secondary-30: #ffde57;
+    --accent-10: #000000;
+    --font-main: "Space Grotesk", "Trebuchet MS", sans-serif;
+    --font-mono: "IBM Plex Mono", "Courier New", monospace;
 }
 
 * {
-  box-sizing: border-box;
+    box-sizing: border-box;
 }
 
 html,
 body,
 #root {
-  min-height: 100%;
+    min-height: 100%;
 }
 
 body {
-  margin: 0;
-  font-family: var(--font-main);
-  color: var(--accent-10);
-  background:
-    radial-gradient(circle at 12% -20%, rgba(255, 222, 87, 0.32), transparent 38%),
-    linear-gradient(160deg, #1800ac 0%, #1f03cf 62%, #1800ac 100%);
+    margin: 0;
+    font-family: var(--font-main);
+    color: var(--accent-10);
+    background:
+        radial-gradient(
+            circle at 12% -20%,
+            rgba(255, 222, 87, 0.32),
+            transparent 38%
+        ),
+        linear-gradient(160deg, #1800ac 0%, #1f03cf 62%, #1800ac 100%);
 }

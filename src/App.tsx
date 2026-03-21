@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import './App.css'
-import { loadAppConfig, type AppConfig } from './config.ts'
+import { loadAppConfig, type AppConfig } from './utils/config'
 import { useAuth, AuthProvider } from './contexts/AuthContext'
 import { ProtectedRoute } from './middleware/ProtectedRoute'
 import { LoginView } from './views/LoginView'
 import { DashboardView } from './views/DashboardView'
 import { ContestView } from './views/ContestView'
-import { WorkspaceView } from './views/WorkspaceView'
+import { ProblemsetView } from './views/ProblemsetView.tsx'
 import { AppHeader } from './components/AppHeader'
 import {
   formatClock,
@@ -15,7 +14,7 @@ import {
   buildApiResourceUrl,
   requestJson,
   starterCode,
-} from './utils'
+} from './utils/utils.ts'
 import type { ViewMode, EditorLanguage, Contest, Scoreboard, Team, ContestProblem, Submission, Clarification, Language } from './types'
 
 const DRAFTS_STORAGE_KEY = 'domjudge-problem-drafts-v1'
@@ -102,7 +101,7 @@ function AppContent() {
 
             setWarning(
               `Configured contestId "${configuredContestId}" was not found for this account/session. ` +
-                `Falling back to "${selectedContest.id}". Available contests: ${available}`,
+              `Falling back to "${selectedContest.id}". Available contests: ${available}`,
             )
           }
         }
@@ -446,7 +445,7 @@ function AppContent() {
   )
 
   const renderWorkspace = () => (
-    <WorkspaceView
+    <ProblemsetView
       selectedProblemId={selectedProblemId}
       problems={problems}
       selectedProblem={selectedProblem}
@@ -480,14 +479,6 @@ function AppContent() {
           onViewChange={(view) => setViewMode(view)}
           onLogout={logout}
         />
-
-        <section className="problem-pills" aria-label="problem legend">
-          {problemLabels.map((label) => (
-            <span key={label} className="pill">
-              {label}
-            </span>
-          ))}
-        </section>
 
         {loading ? <section className="panel loading-panel">Loading contest data from DOMjudge API...</section> : null}
 
