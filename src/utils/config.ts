@@ -170,7 +170,9 @@ async function loadRuntimeConfig(path: string): Promise<RuntimeConfig | null> {
 
 export async function loadAppConfig(): Promise<AppConfig> {
     const env = import.meta.env as Record<string, string | undefined>;
-    const configPath = env.VITE_APP_CONFIG_PATH ?? "/app-config.json";
+    const baseUrl = env.BASE_URL ?? "/";
+    const normalizedBaseUrl = baseUrl.endsWith("/")? baseUrl: `${baseUrl}/`;
+    const configPath = env.VITE_APP_CONFIG_PATH ?? `${normalizedBaseUrl}app-config.json`;
     const fallback = defaultConfigFromEnv();
 
     const runtime = await loadRuntimeConfig(configPath);
