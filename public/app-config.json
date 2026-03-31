@@ -1,7 +1,7 @@
 {
-  "apiBaseUrl": "/api/v4",
-  "contestId": "",
-  "withCredentials": true,
-  "autoRefreshMs": 15000,
-  "requestTimeoutMs": 10000
+	"apiBaseUrl": "/api/v4",
+	"contestId": "demo",
+	"withCredentials": true,
+	"autoRefreshMs": 15000,
+	"requestTimeoutMs": 10000
 }
