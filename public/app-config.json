@@ -1,5 +1,5 @@
 {
-	"apiBaseUrl": "/api/v4",
+	"apiBaseUrl": "http://localhost/domjudge/api/v4/", //"/api/v4",
 	"contestId": "demo",
 	"withCredentials": true,
 	"autoRefreshMs": 15000,

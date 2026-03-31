@@ -16,4 +16,5 @@ export default defineConfig({
 			usePolling: true,
 		},
 	},
+	base: "/UMNPC-ic26-frontend/",
 });
