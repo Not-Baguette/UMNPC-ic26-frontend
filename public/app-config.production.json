@@ -1,0 +1,7 @@
+{
+  "apiBaseUrl": "https://contest.ambalabus.my.id/domjudge/api/v4",
+  "contestId": "dj-3",
+  "withCredentials": false,
+  "autoRefreshMs": 15000,
+  "requestTimeoutMs": 10000
+}

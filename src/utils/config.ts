@@ -168,14 +168,42 @@ async function loadRuntimeConfig(path: string): Promise<RuntimeConfig | null> {
     return json as RuntimeConfig;
 }
 
+async function loadFirstRuntimeConfig(
+    paths: string[],
+): Promise<RuntimeConfig | null> {
+    for (const path of paths) {
+        const runtime = await loadRuntimeConfig(path);
+        if (runtime) {
+            return runtime;
+        }
+    }
+
+    return null;
+}
+
 export async function loadAppConfig(): Promise<AppConfig> {
     const env = import.meta.env as Record<string, string | undefined>;
+    const mode = env.MODE ?? import.meta.env.MODE;
     const baseUrl = env.BASE_URL ?? "/";
     const normalizedBaseUrl = baseUrl.endsWith("/")? baseUrl: `${baseUrl}/`;
-    const configPath = env.VITE_APP_CONFIG_PATH ?? `${normalizedBaseUrl}app-config.json`;
+    const configCandidates: string[] = [];
+
+    if (env.VITE_APP_CONFIG_PATH) {
+        configCandidates.push(env.VITE_APP_CONFIG_PATH);
+    } else {
+        if (mode && mode !== "development") {
+            configCandidates.push(`${normalizedBaseUrl}app-config.${mode}.json`);
+        }
+        if (import.meta.env.PROD) {
+            configCandidates.push(`${normalizedBaseUrl}app-config.production.json`);
+        }
+        configCandidates.push(`${normalizedBaseUrl}app-config.json`);
+    }
+
+    const uniqueCandidates = [...new Set(configCandidates)];
     const fallback = defaultConfigFromEnv();
 
-    const runtime = await loadRuntimeConfig(configPath);
+    const runtime = await loadFirstRuntimeConfig(uniqueCandidates);
     if (!runtime) {
         return fallback;
     }
