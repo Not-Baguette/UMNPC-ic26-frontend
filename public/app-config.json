@@ -1,6 +1,6 @@
 {
 	"apiBaseUrl": "/api/v4",
-	"contestId": "dj-4",
+	"contestId": "dj-3",
 	"withCredentials": false,
 	"autoRefreshMs": 15000,
 	"requestTimeoutMs": 10000
